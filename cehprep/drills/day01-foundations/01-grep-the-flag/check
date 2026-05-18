@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+
+[ -f "$HERE/answer.txt" ] || { echo "missing answer.txt — write your flag there"; exit 1; }
+[ -f "$HERE/.answer" ]    || { echo "drill state corrupt — re-run: drill start day01 01"; exit 2; }
+
+submitted=$(tr -d '[:space:]' < "$HERE/answer.txt")
+expected=$(tr -d '[:space:]' < "$HERE/.answer")
+
+if [ "$submitted" = "$expected" ]; then
+  exit 0
+else
+  echo "Your answer.txt doesn't match the expected flag."
+  echo "Make sure it contains the full FLAG{...} value, nothing else."
+  exit 1
+fi

@@ -1,0 +1,34 @@
+========================================================================
+   _____  ______  _    _   _____                            __     ____  __
+  / ____||  ____|| |  | | |  __ \                           \ \   / /  \/  |
+ | |     | |__   | |__| | | |__) |__  __    _    _   ___    \ \_/ /| \  / |
+ | |     |  __|  |  __  | |  ___// _ \\ \/ / | || | / __|    \   / | |\/| |
+ | |____ | |____ | |  | | | |   |  __/ >  <  | || || (__      | |  | |  | |
+  \_____||______||_|  |_| |_|    \___|/_/\_\ |_||_| \___|     |_|  |_|  |_|
+
+   CEH v13 Prep · WebVM · Debian Linux in your browser tab
+========================================================================
+
+You're inside a real Linux environment running on WebAssembly.
+Everything is sandboxed in your browser — your host machine is safe.
+
+What's preloaded:
+  • Pentest CLI: nmap · sqlmap · hydra · john · hashcat · nikto · dirb
+                 ffuf · gobuster · whois · dig · binwalk · radare2 · gdb
+                 tshark · exiftool · pwntools · impacket
+  • CEH-Prep drills under /home/user/cehprep/drills
+
+Getting started:
+  $ drill list                # show every drill
+  $ drill start day01 01      # open the first drill
+  $ drill check               # grade your current drill
+  $ drill next                # advance to the next drill
+
+Limits (use the VirtualBox + Kali path for these):
+  • No raw sockets (Scapy SYN floods, ARP spoof — won't work)
+  • No packet capture on a live interface (Wireshark capture)
+  • No wireless / Bluetooth hardware
+  Everything HTTP-only, script-only, file-analysis is fully supported.
+
+Type  drill help  any time.
+========================================================================

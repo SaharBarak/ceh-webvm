@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# drill — CEH-Prep WebVM drill runner.
+#
+# Layout assumption:
+#   /home/user/cehprep/drills/dayNN-slug/MM-drill-slug/
+#     README.md   # the prompt
+#     setup.sh    # optional — runs once when the drill is started
+#     check       # local grader (exit 0 = pass, non-zero = fail)
+#     .state/     # created on first start; current-drill marker lives here
+
+set -euo pipefail
+
+DRILLS_ROOT="${DRILLS_ROOT:-$HOME/cehprep/drills}"
+STATE_DIR="$HOME/cehprep/.state"
+mkdir -p "$STATE_DIR"
+CURRENT_FILE="$STATE_DIR/current"
+
+# ---- helpers -----------------------------------------------------------
+
+die() { echo "drill: $*" >&2; exit 1; }
+
+list_drills() {
+  find "$DRILLS_ROOT" -mindepth 2 -maxdepth 2 -type d 2>/dev/null \
+    | sort \
+    | while read -r d; do
+        rel="${d#$DRILLS_ROOT/}"
+        day="${rel%%/*}"
+        slug="${rel#*/}"
+        title="$(head -n1 "$d/README.md" 2>/dev/null | sed 's/^# *//')"
+        printf "  %s/%s  —  %s\n" "$day" "$slug" "${title:-(no title)}"
+      done
+}
+
+current_dir() {
+  [ -f "$CURRENT_FILE" ] && cat "$CURRENT_FILE" || true
+}
+
+resolve_drill() {
+  # Accept: "day01 01", "day01/01-grep-the-flag", "01" (if a current day is active)
+  local arg1="${1:-}" arg2="${2:-}"
+  if [ -z "$arg1" ]; then return 1; fi
+
+  # Direct full path
+  if [ -d "$DRILLS_ROOT/$arg1" ] && [ -z "$arg2" ]; then
+    echo "$DRILLS_ROOT/$arg1"; return 0
+  fi
+
+  # day + slug-or-number
+  if [ -n "$arg2" ]; then
+    # match day prefix (allow "day01" or "01")
+    local day_match
+    day_match=$(find "$DRILLS_ROOT" -mindepth 1 -maxdepth 1 -type d -name "${arg1}*" -o -name "day${arg1}*" 2>/dev/null | head -n1)
+    [ -z "$day_match" ] && return 1
+    local slug_match
+    slug_match=$(find "$day_match" -mindepth 1 -maxdepth 1 -type d -name "${arg2}*" 2>/dev/null | head -n1)
+    [ -n "$slug_match" ] && { echo "$slug_match"; return 0; }
+  fi
+
+  return 1
+}
+
+# ---- commands ----------------------------------------------------------
+
+cmd_list() {
+  echo "Available drills:"
+  list_drills
+}
+
+cmd_start() {
+  local target
+  target=$(resolve_drill "$@") || die "drill not found. Try: drill list"
+  echo "$target" > "$CURRENT_FILE"
+  cd "$target"
+  [ -x ./setup.sh ] && ./setup.sh
+  echo "=========================================================="
+  echo "Drill: ${target#$DRILLS_ROOT/}"
+  echo "=========================================================="
+  cat README.md 2>/dev/null || echo "(no README)"
+  echo
+  echo "When you're done, run:  drill check"
+  # Spawn a subshell anchored in the drill dir so the user lands there.
+  exec bash --login -c "cd '$target' && exec bash"
+}
+
+cmd_check() {
+  local cur
+  cur=$(current_dir)
+  [ -z "$cur" ] && die "no drill in progress. Run: drill start <day> <slug>"
+  [ ! -x "$cur/check" ] && die "drill is missing an executable ./check at $cur"
+  ( cd "$cur" && ./check ) && {
+    echo "✓ pass"
+    echo "$cur" >> "$STATE_DIR/passed"
+  } || {
+    echo "✗ fail — try again, or run  drill hint"
+    exit 1
+  }
+}
+
+cmd_hint() {
+  local cur
+  cur=$(current_dir)
+  [ -z "$cur" ] && die "no drill in progress."
+  if [ -f "$cur/HINT.md" ]; then cat "$cur/HINT.md"
+  else echo "(no hint for this drill — try reading README.md again)"
+  fi
+}
+
+cmd_next() {
+  local cur next
+  cur=$(current_dir)
+  if [ -z "$cur" ]; then
+    next=$(find "$DRILLS_ROOT" -mindepth 2 -maxdepth 2 -type d | sort | head -n1)
+  else
+    next=$(find "$DRILLS_ROOT" -mindepth 2 -maxdepth 2 -type d | sort | awk -v cur="$cur" 'found{print; exit} $0==cur{found=1}')
+  fi
+  [ -z "$next" ] && die "no more drills — you're at the end of the curriculum."
+  cmd_start "${next#$DRILLS_ROOT/}"
+}
+
+cmd_status() {
+  local cur
+  cur=$(current_dir)
+  if [ -z "$cur" ]; then
+    echo "no drill in progress."
+  else
+    echo "current: ${cur#$DRILLS_ROOT/}"
+  fi
+  local passed=0
+  [ -f "$STATE_DIR/passed" ] && passed=$(wc -l < "$STATE_DIR/passed" | tr -d ' ')
+  local total
+  total=$(find "$DRILLS_ROOT" -mindepth 2 -maxdepth 2 -type d 2>/dev/null | wc -l | tr -d ' ')
+  echo "passed: $passed / $total"
+}
+
+cmd_help() {
+  cat <<'EOF'
+drill — CEH-Prep WebVM drill runner
+
+Usage:
+  drill list                    list every drill in the curriculum
+  drill start <day> <slug>      open a drill (e.g. drill start day01 01)
+  drill check                   grade the current drill (./check)
+  drill hint                    show HINT.md for current drill
+  drill next                    move to the next drill
+  drill status                  show progress
+  drill help                    this message
+
+Drills live under /home/user/cehprep/drills/dayNN-*/MM-*/
+EOF
+}
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  list)   cmd_list ;;
+  start)  cmd_start "$@" ;;
+  check)  cmd_check ;;
+  hint)   cmd_hint ;;
+  next)   cmd_next ;;
+  status) cmd_status ;;
+  help|-h|--help) cmd_help ;;
+  *) die "unknown command: $cmd (try: drill help)" ;;
+esac

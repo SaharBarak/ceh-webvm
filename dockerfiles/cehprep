@@ -1,0 +1,71 @@
+# CEH-Prep custom WebVM disk image — based on debian_mini.
+# Build via the upstream Deploy workflow with DOCKERFILE_PATH=dockerfiles/cehprep.
+# Keep total ext2 under 950M for GitHub Pages.
+
+FROM --platform=linux/386 i386/debian:bookworm
+ARG DEBIAN_FRONTEND=noninteractive
+
+# 1. Core toolchain (kept from upstream debian_mini for parity)
+RUN apt-get clean && apt-get update && apt-get -y upgrade && \
+    apt-get -y install --no-install-recommends \
+        apt-utils ca-certificates curl wget \
+        bash-completion sudo less file vim nano tmux git jq xxd \
+        gcc make python3 python3-pip python3-venv \
+        ruby nodejs unzip fakeroot dbus whiptail hexedit patch ucf \
+        manpages luajit lua5.4 dialog netcat-openbsd \
+        openssl gnupg ca-certificates \
+        cowsay
+
+# 2. Pentest CLI tooling for CEH drills.
+#    Picked for HTTP/script-level fitness inside WebVM (no raw sockets).
+RUN apt-get -y install --no-install-recommends \
+        nmap \
+        sqlmap \
+        hydra \
+        john \
+        hashcat \
+        nikto \
+        dirb \
+        whois dnsutils \
+        binwalk \
+        radare2 \
+        gdb strace ltrace \
+        tshark \
+        exiftool ent
+
+# 3. Lightweight Go/Rust HTTP tools via apt where available; install ffuf via release tarball.
+RUN apt-get -y install --no-install-recommends gobuster wfuzz || true
+RUN curl -fsSL -o /tmp/ffuf.tgz \
+      "https://github.com/ffuf/ffuf/releases/download/v2.1.0/ffuf_2.1.0_linux_386.tar.gz" \
+    && tar -xzf /tmp/ffuf.tgz -C /usr/local/bin/ ffuf \
+    && rm /tmp/ffuf.tgz && chmod +x /usr/local/bin/ffuf
+
+# 4. Python pentest libs (work inside WebVM via WASM sandbox).
+RUN pip3 install --no-cache-dir --break-system-packages \
+        requests beautifulsoup4 lxml \
+        pwntools \
+        impacket \
+        cryptography
+
+# 5. Clean apt caches to keep ext2 small.
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# 6. Default user (matches upstream pattern — root has password, `user` for daily work).
+RUN useradd -m user && echo "user:REDACTED" | chpasswd && \
+    echo "root:REDACTED" | chpasswd && \
+    echo "user ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/user
+
+# 7. CEH-Prep drill scaffold (the bread and butter of this image).
+COPY --chown=user:user ./cehprep /home/user/cehprep
+RUN ln -s /home/user/cehprep/bin/drill /usr/local/bin/drill && \
+    chmod +x /home/user/cehprep/bin/drill && \
+    find /home/user/cehprep/drills -name check -exec chmod +x {} + && \
+    find /home/user/cehprep/drills -name setup.sh -exec chmod +x {} +
+
+# 8. Welcome banner (replaces upstream Welcome.txt for first-boot motd).
+RUN echo 'cat /home/user/cehprep/docs/Welcome.txt 2>/dev/null' >> /home/user/.bashrc && \
+    echo 'echo "Tip: type \`drill list\` to see available drills."' >> /home/user/.bashrc
+
+WORKDIR /home/user
+ENV HOME="/home/user" TERM="xterm" USER="user" SHELL="/bin/bash" EDITOR="vim" LANG="en_US.UTF-8" LC_ALL="C"
+CMD ["/bin/bash"]

@@ -50,10 +50,13 @@ RUN pip3 install --no-cache-dir --break-system-packages \
 # 5. Clean apt caches to keep ext2 small.
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# 6. Default user (matches upstream pattern — root has password, `user` for daily work).
-RUN useradd -m user && echo "user:REDACTED" | chpasswd && \
-    echo "root:REDACTED" | chpasswd && \
-    echo "user ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/user
+# 6. Default user. No passwords are set — this is a single-user, per-browser-tab
+#    sandbox; root sessions are fine without auth, and `user` gets passwordless
+#    sudo when needed. Hardcoding a password here adds zero security and trips
+#    secret scanners.
+RUN useradd -m user && \
+    echo "user ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/user && \
+    chmod 0440 /etc/sudoers.d/user
 
 # 7. CEH-Prep drill scaffold (the bread and butter of this image).
 COPY --chown=user:user ./cehprep /home/user/cehprep

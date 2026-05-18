@@ -1,5 +1,12 @@
-FROM --platform=linux/386 i386/debian:bookworm
+FROM --platform=linux/386 i386/debian:buster
 ARG DEBIAN_FRONTEND=noninteractive
+
+# Point APT to the archived mirrors (Buster is EOL)
+RUN echo "deb [trusted=yes] http://archive.debian.org/debian buster main contrib non-free" \
+  > /etc/apt/sources.list && \
+	echo "deb [trusted=yes] http://archive.debian.org/debian-security buster/updates main" \
+	>> /etc/apt/sources.list
+
 RUN apt-get clean && apt-get update && apt-get -y upgrade
 RUN apt-get -y install apt-utils gcc \
 	python3 vim unzip ruby nodejs \

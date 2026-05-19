@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+
+[ -f "$HERE/answers.txt" ] || { echo "missing answers.txt"; exit 1; }
+[ -f "$HERE/.answers" ]    || { echo "drill state corrupt"; exit 2; }
+
+# Normalize: drop comments + blanks, collapse whitespace, uppercase SQL keywords.
+norm() {
+  python3 - "$1" <<'PY'
+import sys, re
+KW = ['SELECT','FROM','WHERE','OR','AND','UNION','NULL','SLEEP','LIKE','IS']
+out = []
+for raw in open(sys.argv[1]):
+    s = raw.strip()
+    if not s or s.startswith('#'): continue
+    s = re.sub(r'\s+', ' ', s)
+    # uppercase whole-word SQL keywords
+    for k in KW:
+        s = re.sub(rf'\b{k}\b', k, s, flags=re.IGNORECASE)
+    out.append(s)
+print('\n'.join(out))
+PY
+}
+
+user=$(norm "$HERE/answers.txt")
+mapfile -t user_lines <<< "$user"
+mapfile -t accepted < "$HERE/.answers"
+
+if [ "${#user_lines[@]}" -ne "${#accepted[@]}" ]; then
+  echo "expected ${#accepted[@]} answers, got ${#user_lines[@]}"
+  exit 1
+fi
+
+fail=0
+for i in "${!accepted[@]}"; do
+  IFS='|' read -ra forms <<< "${accepted[$i]//||/|}"
+  ok=0
+  user_n="${user_lines[$i]}"
+  for form in "${forms[@]}"; do
+    [ -z "$form" ] && continue
+    form_n=$(printf '%s' "$form" | python3 -c "
+import sys,re
+s=sys.stdin.read().strip()
+s=re.sub(r'\s+',' ',s)
+for k in ['SELECT','FROM','WHERE','OR','AND','UNION','NULL','SLEEP','LIKE','IS']:
+    s=re.sub(rf'\b{k}\b',k,s,flags=re.IGNORECASE)
+print(s)
+")
+    [ "$user_n" = "$form_n" ] && { ok=1; break; }
+  done
+  if [ "$ok" -ne 1 ]; then
+    echo "Q$((i+1)) wrong:  got '${user_lines[$i]}'"
+    fail=1
+  fi
+done
+
+[ "$fail" -eq 0 ]

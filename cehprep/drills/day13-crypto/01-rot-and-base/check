@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+
+[ -f "$HERE/answers.txt" ] || { echo "missing answers.txt"; exit 1; }
+[ -f "$HERE/.answer" ]     || { echo "drill state corrupt"; exit 2; }
+
+# Strip comments + blanks, lowercase
+norm() {
+  grep -vE '^\s*(#|$)' "$1" | tr 'A-Z' 'a-z' | sed 's/[[:space:]]//g'
+}
+
+mapfile -t user     < <(norm "$HERE/answers.txt")
+mapfile -t expected < <(norm "$HERE/.answer")
+
+if [ "${#user[@]}" -ne "${#expected[@]}" ]; then
+  echo "expected ${#expected[@]} answers, got ${#user[@]}"
+  exit 1
+fi
+
+fail=0
+for i in "${!expected[@]}"; do
+  if [ "${user[$i]}" != "${expected[$i]}" ]; then
+    echo "Q$((i+1)) wrong:  got '${user[$i]}'"
+    fail=1
+  fi
+done
+
+[ "$fail" -eq 0 ]

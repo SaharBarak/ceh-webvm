@@ -6,14 +6,16 @@ FROM --platform=linux/386 i386/debian:bookworm
 ARG DEBIAN_FRONTEND=noninteractive
 
 # 1. Core toolchain (kept from upstream debian_mini for parity).
-#    python3-cryptography is installed from apt because i386 has no prebuilt
-#    wheel for PyPI cryptography and rustup doesn't support i386-unknown-linux-gnu.
+#    python3-cryptography + python3-impacket are installed from apt because
+#    i386 has no prebuilt wheels for the newer PyPI versions and rustup
+#    doesn't support i386-unknown-linux-gnu.
 RUN apt-get clean && apt-get update && apt-get -y upgrade && \
     apt-get -y install --no-install-recommends \
         apt-utils ca-certificates curl wget \
         bash-completion sudo less file vim nano tmux git jq xxd \
         gcc make python3 python3-pip python3-venv \
-        python3-cryptography \
+        python3-cryptography python3-impacket \
+        python3-requests python3-bs4 python3-lxml \
         ruby nodejs unzip fakeroot dbus whiptail hexedit patch ucf \
         manpages luajit lua5.4 dialog netcat-openbsd \
         openssl gnupg ca-certificates \
@@ -46,13 +48,11 @@ RUN curl -fsSL -o /tmp/ffuf.tgz \
     && tar -xzf /tmp/ffuf.tgz -C /usr/local/bin/ ffuf \
     && rm /tmp/ffuf.tgz && chmod +x /usr/local/bin/ffuf
 
-# 4. Python pentest libs (work inside WebVM via WASM sandbox).
-#    `cryptography` is satisfied by the apt-installed python3-cryptography
-#    above — see note in section 1.
-RUN pip3 install --no-cache-dir --break-system-packages \
-        requests beautifulsoup4 lxml \
-        pwntools \
-        impacket
+# 4. Python pentest libs.
+#    All deps now come from apt (see section 1) so this layer is intentionally
+#    empty for now. pwntools is dropped — its paramiko dep drags newer
+#    cryptography that wants a Rust toolchain unsupported on i386.
+#    Re-add later as a `pip install --no-deps pwntools` if needed.
 
 # 5. Clean apt caches to keep ext2 small.
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*

@@ -74,8 +74,15 @@ RUN useradd -m user && \
     chmod 0440 /etc/sudoers.d/user
 
 # 7. CEH-Prep drill scaffold (the bread and butter of this image).
+#    Permissions: each drill's setup.sh writes a sibling `.answer` file at
+#    runtime, so the drill dirs must be user-writable. The COPY --chown
+#    sets ownership but the ext2 extract in the deploy workflow has been
+#    observed to land the drill tree as read-only for the user — explicit
+#    chmod -R u+rwX after copy guarantees writability.
 COPY --chown=user:user ./cehprep /home/user/cehprep
-RUN ln -s /home/user/cehprep/bin/drill /usr/local/bin/drill && \
+RUN chown -R user:user /home/user/cehprep && \
+    chmod -R u+rwX,go+rX /home/user/cehprep && \
+    ln -s /home/user/cehprep/bin/drill /usr/local/bin/drill && \
     chmod +x /home/user/cehprep/bin/drill && \
     find /home/user/cehprep/drills -name check -exec chmod +x {} + && \
     find /home/user/cehprep/drills -name setup.sh -exec chmod +x {} +

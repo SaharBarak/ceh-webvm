@@ -5,10 +5,12 @@
 FROM --platform=linux/386 i386/debian:bookworm
 ARG DEBIAN_FRONTEND=noninteractive
 
-# 1. Core toolchain (kept from upstream debian_mini for parity).
-#    python3-cryptography + python3-impacket are installed from apt because
-#    i386 has no prebuilt wheels for the newer PyPI versions and rustup
-#    doesn't support i386-unknown-linux-gnu.
+# 1. Core toolchain. Dropped from upstream debian_mini for ext2 budget:
+#      ruby (~30 MB), nodejs (~80 MB), luajit/lua5.4 (~10 MB) — none used
+#      by our drills. Re-add later if a drill genuinely needs them.
+#    python3-cryptography + python3-impacket come from apt because i386 has
+#    no prebuilt wheels for the newer PyPI versions and rustup doesn't
+#    support i386-unknown-linux-gnu.
 RUN apt-get clean && apt-get update && apt-get -y upgrade && \
     apt-get -y install --no-install-recommends \
         apt-utils ca-certificates curl wget \
@@ -16,8 +18,8 @@ RUN apt-get clean && apt-get update && apt-get -y upgrade && \
         gcc make python3 python3-pip python3-venv \
         python3-cryptography python3-impacket \
         python3-requests python3-bs4 python3-lxml \
-        ruby nodejs unzip fakeroot dbus whiptail hexedit patch ucf \
-        manpages luajit lua5.4 dialog netcat-openbsd \
+        unzip fakeroot dbus whiptail hexedit patch ucf \
+        manpages dialog netcat-openbsd \
         openssl gnupg ca-certificates \
         cowsay
 

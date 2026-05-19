@@ -13,38 +13,36 @@ ARG DEBIAN_FRONTEND=noninteractive
 #    support i386-unknown-linux-gnu.
 RUN apt-get clean && apt-get update && apt-get -y upgrade && \
     apt-get -y install --no-install-recommends \
-        apt-utils ca-certificates curl wget \
+        ca-certificates curl wget \
         bash-completion sudo less file vim nano tmux git jq xxd \
-        gcc make python3 python3-pip python3-venv \
+        gcc make python3 python3-pip \
         python3-cryptography python3-impacket \
         python3-requests python3-bs4 python3-lxml \
-        unzip fakeroot dbus whiptail hexedit patch ucf \
-        manpages dialog netcat-openbsd \
-        openssl gnupg ca-certificates \
+        unzip patch \
+        dialog netcat-openbsd \
+        openssl gnupg \
         cowsay
 
-# 2. Pentest CLI tooling for CEH drills — split into two groups:
-#    (a) must-have: build fails if any is missing.
-#    (b) nice-to-have: best-effort; skipped on i386 bookworm if unavailable.
+# 2. Pentest CLI tooling for CEH drills.
 #    Picked for HTTP/script-level fitness inside WebVM (no raw sockets).
-#    Dropped from earlier list (not in bookworm/i386 main):
+#    Dropped from earlier draft to fit the 900 M ext2 budget:
 #      • nikto    — only in `contrib` on bookworm
-#      • radare2  — amd64-only in bookworm; use gdb + binwalk for RE drills
+#      • radare2  — amd64-only in bookworm; gdb covers basic RE
+#      • tshark   — ~150 MB (wireshark-common). Re-add when we need pcap drills.
+#      • hashcat  — ~100 MB. john alone covers the crypto drills for now.
+#      • binwalk  — ~80 MB scipy deps. file/strings/xxd cover MVP file-analysis.
+#      • exiftool, ent, wfuzz — modest size but unused so far.
 RUN apt-get -y install --no-install-recommends \
         nmap \
         sqlmap \
         hydra \
         john \
-        hashcat \
         dirb \
         whois dnsutils \
-        binwalk \
-        gdb strace ltrace \
-        tshark \
-        exiftool ent
+        gdb strace ltrace
 
-# 3. Lightweight Go/Rust HTTP tools via apt where available; install ffuf via release tarball.
-RUN apt-get -y install --no-install-recommends gobuster wfuzz || true
+# 3. Lightweight Go HTTP tools — apt for gobuster, release tarball for ffuf.
+RUN apt-get -y install --no-install-recommends gobuster || true
 RUN curl -fsSL -o /tmp/ffuf.tgz \
       "https://github.com/ffuf/ffuf/releases/download/v2.1.0/ffuf_2.1.0_linux_386.tar.gz" \
     && tar -xzf /tmp/ffuf.tgz -C /usr/local/bin/ ffuf \
@@ -56,8 +54,16 @@ RUN curl -fsSL -o /tmp/ffuf.tgz \
 #    cryptography that wants a Rust toolchain unsupported on i386.
 #    Re-add later as a `pip install --no-deps pwntools` if needed.
 
-# 5. Clean apt caches to keep ext2 small.
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+# 5. Aggressive size trim — apt caches, docs, locales, man pages.
+#    Combined these save ~150 MB on top of the package cuts above.
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/* /tmp/* /root/.cache && \
+    find /usr/share/doc -depth -mindepth 1 -delete && \
+    find /usr/share/man -depth -mindepth 1 -delete && \
+    find /usr/share/info -depth -mindepth 1 -delete && \
+    find /usr/share/locale -mindepth 1 -maxdepth 1 \
+         -not -name 'en*' -not -name 'C*' -not -name 'locale.alias' \
+         -exec rm -rf {} +
 
 # 6. Default user. No passwords are set — this is a single-user, per-browser-tab
 #    sandbox; root sessions are fine without auth, and `user` gets passwordless

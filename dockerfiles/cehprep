@@ -16,19 +16,22 @@ RUN apt-get clean && apt-get update && apt-get -y upgrade && \
         openssl gnupg ca-certificates \
         cowsay
 
-# 2. Pentest CLI tooling for CEH drills.
+# 2. Pentest CLI tooling for CEH drills — split into two groups:
+#    (a) must-have: build fails if any is missing.
+#    (b) nice-to-have: best-effort; skipped on i386 bookworm if unavailable.
 #    Picked for HTTP/script-level fitness inside WebVM (no raw sockets).
+#    Dropped from earlier list (not in bookworm/i386 main):
+#      • nikto    — only in `contrib` on bookworm
+#      • radare2  — amd64-only in bookworm; use gdb + binwalk for RE drills
 RUN apt-get -y install --no-install-recommends \
         nmap \
         sqlmap \
         hydra \
         john \
         hashcat \
-        nikto \
         dirb \
         whois dnsutils \
         binwalk \
-        radare2 \
         gdb strace ltrace \
         tshark \
         exiftool ent
